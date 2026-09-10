@@ -23,7 +23,9 @@ import {
   Clock,
   Activity,
   User,
-  Headphones
+  Headphones,
+  Menu,
+  X
 } from 'lucide-react';
 import { useTrading } from '../../context/TradingContext';
 import { AppDomain, AppTab } from '../../types';
@@ -65,6 +67,7 @@ export const Header: React.FC = () => {
   } = useTrading();
 
   const [isWalletDropdownOpen, setIsWalletDropdownOpen] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [copied, setCopied] = useState(false);
 
   const copyAddress = () => {
@@ -547,8 +550,146 @@ export const Header: React.FC = () => {
               <span>Sign In</span>
             </button>
           )}
+
+          {/* Mobile Navigation Toggle Button */}
+          <button
+            id="mobile-menu-toggle-btn"
+            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+            className="md:hidden flex items-center justify-center p-2 rounded-xl border border-white/10 bg-slate-900/80 text-slate-300 hover:text-white transition-colors ml-1"
+            title="Toggle mobile menu"
+          >
+            {isMobileMenuOpen ? <X className="h-4 w-4 text-cyan-400" /> : <Menu className="h-4 w-4" />}
+          </button>
         </div>
       </nav>
+
+      {/* Mobile Drawer Overlay */}
+      {isMobileMenuOpen && (
+        <div className="md:hidden border-b border-white/10 bg-[#090e1e]/98 p-4 space-y-3 shadow-2xl backdrop-blur-xl animate-in slide-in-from-top duration-200">
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              onClick={() => {
+                setCurrentDomain('app');
+                setCurrentTab('portfolio');
+                setIsMobileMenuOpen(false);
+              }}
+              className={`flex items-center space-x-2 p-2.5 rounded-xl border text-xs font-mono transition ${
+                currentTab === 'portfolio' ? 'border-cyan-500/40 bg-cyan-950/40 text-cyan-300 font-bold' : 'border-white/5 bg-slate-900/60 text-slate-300'
+              }`}
+            >
+              <BarChart3 className="h-4 w-4 text-cyan-400" />
+              <span>Portfolio</span>
+            </button>
+            <button
+              onClick={() => {
+                setCurrentDomain('app');
+                setCurrentTab('spot');
+                setIsMobileMenuOpen(false);
+              }}
+              className={`flex items-center space-x-2 p-2.5 rounded-xl border text-xs font-mono transition ${
+                currentTab === 'spot' ? 'border-cyan-500/40 bg-cyan-950/40 text-cyan-300 font-bold' : 'border-white/5 bg-slate-900/60 text-slate-300'
+              }`}
+            >
+              <TrendingUp className="h-4 w-4 text-cyan-400" />
+              <span>Spot Trade</span>
+            </button>
+            <button
+              onClick={() => {
+                setCurrentDomain('app');
+                setCurrentTab('futures');
+                setIsMobileMenuOpen(false);
+              }}
+              className={`flex items-center space-x-2 p-2.5 rounded-xl border text-xs font-mono transition ${
+                currentTab === 'futures' || currentTab === 'staking' ? 'border-cyan-500/40 bg-cyan-950/40 text-cyan-300 font-bold' : 'border-white/5 bg-slate-900/60 text-slate-300'
+              }`}
+            >
+              <Clock className="h-4 w-4 text-emerald-400" />
+              <span>Futures</span>
+            </button>
+            <button
+              onClick={() => {
+                setCurrentDomain('app');
+                setCurrentTab('mining');
+                setIsMobileMenuOpen(false);
+              }}
+              className={`flex items-center space-x-2 p-2.5 rounded-xl border text-xs font-mono transition ${
+                currentTab === 'mining' ? 'border-cyan-500/40 bg-cyan-950/40 text-cyan-300 font-bold' : 'border-white/5 bg-slate-900/60 text-slate-300'
+              }`}
+            >
+              <Cpu className="h-4 w-4 text-amber-400" />
+              <span>Mining</span>
+            </button>
+            <button
+              onClick={() => {
+                setCurrentDomain('app');
+                setCurrentTab('loan');
+                setIsMobileMenuOpen(false);
+              }}
+              className={`flex items-center space-x-2 p-2.5 rounded-xl border text-xs font-mono transition ${
+                currentTab === 'loan' ? 'border-cyan-500/40 bg-cyan-950/40 text-cyan-300 font-bold' : 'border-white/5 bg-slate-900/60 text-slate-300'
+              }`}
+            >
+              <Landmark className="h-4 w-4 text-amber-400" />
+              <span>Loans</span>
+            </button>
+            <button
+              onClick={() => {
+                setCurrentDomain('app');
+                setCurrentTab('market');
+                setIsMobileMenuOpen(false);
+              }}
+              className={`flex items-center space-x-2 p-2.5 rounded-xl border text-xs font-mono transition ${
+                currentTab === 'market' ? 'border-cyan-500/40 bg-cyan-950/40 text-cyan-300 font-bold' : 'border-white/5 bg-slate-900/60 text-slate-300'
+              }`}
+            >
+              <Activity className="h-4 w-4 text-cyan-400" />
+              <span>Markets</span>
+            </button>
+            <button
+              onClick={() => {
+                setCurrentDomain('app');
+                setCurrentTab('profile');
+                setIsMobileMenuOpen(false);
+              }}
+              className={`flex items-center space-x-2 p-2.5 rounded-xl border text-xs font-mono transition ${
+                currentTab === 'profile' ? 'border-purple-500/40 bg-purple-950/40 text-purple-300 font-bold' : 'border-white/5 bg-slate-900/60 text-slate-300'
+              }`}
+            >
+              <User className="h-4 w-4 text-purple-400" />
+              <span>Profile</span>
+            </button>
+            <button
+              onClick={() => {
+                setCurrentDomain('app');
+                setCurrentTab('support');
+                setIsMobileMenuOpen(false);
+              }}
+              className={`flex items-center space-x-2 p-2.5 rounded-xl border text-xs font-mono transition ${
+                currentTab === 'support' ? 'border-indigo-500/40 bg-indigo-950/40 text-indigo-300 font-bold' : 'border-white/5 bg-slate-900/60 text-slate-300'
+              }`}
+            >
+              <Headphones className="h-4 w-4 text-indigo-400" />
+              <span>Support Desk</span>
+            </button>
+          </div>
+
+          {currentUser?.role === 'admin' && (
+            <button
+              onClick={() => {
+                setCurrentDomain('admin');
+                setIsMobileMenuOpen(false);
+              }}
+              className="flex w-full items-center justify-between p-2.5 rounded-xl border border-amber-500/40 bg-amber-950/30 text-amber-300 text-xs font-mono font-bold"
+            >
+              <span className="flex items-center space-x-2">
+                <Lock className="h-4 w-4 text-amber-400" />
+                <span>Admin Root Dashboard</span>
+              </span>
+              <span className="px-2 py-0.5 rounded bg-amber-900 text-amber-200 text-[10px]">ROOT</span>
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Live Market Ticker below navigation bar */}
       <MarketTicker />

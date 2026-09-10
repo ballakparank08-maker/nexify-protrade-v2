@@ -158,6 +158,26 @@ const MainContent: React.FC = () => {
                 >
                   Markets
                 </button>
+                <button
+                  onClick={() => setCurrentTab('profile')}
+                  className={`px-3.5 py-2 rounded-xl text-xs font-medium font-mono shrink-0 transition-all ${
+                    currentTab === 'profile' 
+                      ? 'bg-gradient-to-r from-cyan-500/20 to-indigo-500/20 text-cyan-300 border border-cyan-500/30 font-semibold shadow-sm' 
+                      : 'bg-slate-900/80 border border-white/5 text-slate-300 hover:text-white'
+                  }`}
+                >
+                  Profile
+                </button>
+                <button
+                  onClick={() => setCurrentTab('support')}
+                  className={`px-3.5 py-2 rounded-xl text-xs font-medium font-mono shrink-0 transition-all ${
+                    currentTab === 'support' 
+                      ? 'bg-gradient-to-r from-cyan-500/20 to-indigo-500/20 text-cyan-300 border border-cyan-500/30 font-semibold shadow-sm' 
+                      : 'bg-slate-900/80 border border-white/5 text-slate-300 hover:text-white'
+                  }`}
+                >
+                  Support Desk
+                </button>
               </div>
 
               {/* Tab Views */}
