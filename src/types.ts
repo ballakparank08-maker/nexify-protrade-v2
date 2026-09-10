@@ -9,7 +9,9 @@ export type AppTab =
   | 'loan' 
   | 'rewards' 
   | 'market'
-  | 'convert';
+  | 'convert'
+  | 'profile'
+  | 'support';
 
 export interface CryptoAsset {
   id: string;
@@ -248,13 +250,21 @@ export interface ActiveMiningContract {
 
 export interface UserSession {
   id: string;
+  clientId?: string;
   email: string;
   name: string;
+  phone?: string;
+  avatar?: string;
   role: 'trader' | 'admin';
+  status?: 'active' | 'frozen' | 'suspended';
+  kycStatus?: 'unverified' | 'pending' | 'verified' | 'rejected';
+  twoFactorEnabled?: boolean;
+  invitationCode?: string;
+  myReferralCode?: string;
+  usdtBalance?: number;
   institution?: string;
   walletAddress?: string;
   loginMethod: 'credentials';
-  twoFactorEnabled?: boolean;
   twoFactorSecret?: string;
   twoFactorVerifiedAt?: string;
   backupCodes?: string[];
@@ -265,6 +275,35 @@ export interface UserSession {
   ipAddress?: string;
   createdAt?: string;
   updatedAt?: string;
+}
+
+export interface InvitationCodeItem {
+  code: string;
+  maxUses: number;
+  usedCount: number;
+  createdAt: string;
+}
+
+export interface SupportTicket {
+  id: string;
+  userId: string;
+  userClientId: string;
+  userName: string;
+  userEmail: string;
+  subject: string;
+  category: string;
+  status: 'open' | 'in_progress' | 'resolved' | 'closed';
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SupportMessage {
+  id: string;
+  ticketId: string;
+  senderRole: 'client' | 'admin';
+  senderName: string;
+  text: string;
+  createdAt: string;
 }
 
 export interface SecurityAuditEntry {

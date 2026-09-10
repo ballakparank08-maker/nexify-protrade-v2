@@ -5,9 +5,21 @@ import cors from 'cors';
 import express, { type Request, type Response, type NextFunction } from 'express';
 import rateLimit from 'express-rate-limit';
 import type { CookieOptions } from 'express';
-import { bootstrapAdminUser, deleteSession, findUserBySessionToken, loginUser, registerUser, type PublicUser } from './auth.js';
+import {
+  bootstrapAdminUser,
+  changeUserPassword,
+  deleteSession,
+  findUserById,
+  findUserBySessionToken,
+  loginUser,
+  mapPublicUser,
+  registerUser,
+  sendVerificationCode,
+  updateUserProfile,
+  type PublicUser,
+} from './auth.js';
 import type { AuthConfig } from './config.js';
-import type { SqliteDatabase } from './database.js';
+import type { DatabaseUserRow, SqliteDatabase } from './database.js';
 
 interface AuthenticatedRequest extends Request {
   authUser?: PublicUser;
@@ -111,6 +123,16 @@ export const createApp = ({ db, config }: AppDependencies) => {
     response.json({ ok: true });
   });
 
+  app.post('/api/auth/send-code', (request, response) => {
+    const email = typeof request.body?.email === 'string' ? request.body.email : '';
+    const result = sendVerificationCode(db, email);
+    if ('error' in result) {
+      response.status(result.status).json({ message: result.error });
+      return;
+    }
+    response.status(result.status).json(result.data);
+  });
+
   app.post('/api/auth/register', authAttemptLimiter, (request, response) => {
     const result = registerUser(db, config, request.body ?? {});
     if ('error' in result) {
@@ -145,6 +167,29 @@ export const createApp = ({ db, config }: AppDependencies) => {
     response.json({ user: request.authUser });
   });
 
+  app.post('/api/auth/profile/update', requireAuth, (request: AuthenticatedRequest, response) => {
+    const result = updateUserProfile(db, request.authUser!.id, request.body ?? {});
+    if ('error' in result) {
+      response.status(result.status).json({ message: result.error });
+      return;
+    }
+    response.status(result.status).json(result.data);
+  });
+
+  app.post('/api/auth/profile/change-password', requireAuth, (request: AuthenticatedRequest, response) => {
+    const { currentPassword, newPassword } = request.body ?? {};
+    if (!currentPassword || !newPassword) {
+      response.status(400).json({ message: 'Current password and new password are required.' });
+      return;
+    }
+    const result = changeUserPassword(db, request.authUser!.id, currentPassword, newPassword);
+    if ('error' in result) {
+      response.status(result.status).json({ message: result.error });
+      return;
+    }
+    response.status(result.status).json(result.data);
+  });
+
   app.post('/api/auth/logout', (request: AuthenticatedRequest, response) => {
     if (request.sessionToken) {
       deleteSession(db, config, request.sessionToken);
@@ -155,6 +200,125 @@ export const createApp = ({ db, config }: AppDependencies) => {
 
   app.get('/api/auth/admin/verify', requireAuth, requireRole('admin'), (request: AuthenticatedRequest, response) => {
     response.json({ authorized: true, user: request.authUser });
+  });
+
+  // Admin Client Management Endpoints
+  app.get('/api/admin/clients', requireAuth, requireRole('admin'), (_request, response) => {
+    const rows = db.prepare<unknown[], DatabaseUserRow>('SELECT * FROM users ORDER BY created_at DESC').all();
+    const clients = rows.map(mapPublicUser);
+    response.json({ clients });
+  });
+
+  app.post('/api/admin/clients/balance', requireAuth, requireRole('admin'), (request, response) => {
+    const { userId, amount } = request.body ?? {};
+    if (!userId || typeof amount !== 'number') {
+      response.status(400).json({ message: 'User ID and valid numeric balance amount are required.' });
+      return;
+    }
+    db.setUserBalance(userId, amount);
+    const updated = findUserById(db, userId);
+    if (!updated) {
+      response.status(404).json({ message: 'Client not found.' });
+      return;
+    }
+    response.json({ user: mapPublicUser(updated) });
+  });
+
+  app.post('/api/admin/clients/status', requireAuth, requireRole('admin'), (request, response) => {
+    const { userId, status } = request.body ?? {};
+    if (!userId || !['active', 'frozen', 'suspended'].includes(status)) {
+      response.status(400).json({ message: 'Valid user ID and status (active, frozen, suspended) are required.' });
+      return;
+    }
+    db.setUserStatus(userId, status);
+    const updated = findUserById(db, userId);
+    if (!updated) {
+      response.status(404).json({ message: 'Client not found.' });
+      return;
+    }
+    response.json({ user: mapPublicUser(updated) });
+  });
+
+  // Admin Invitation Codes Endpoints
+  app.get('/api/admin/invitation-codes', requireAuth, requireRole('admin'), (_request, response) => {
+    const codes = db.getInvitationCodes();
+    response.json({ codes });
+  });
+
+  app.post('/api/admin/invitation-codes', requireAuth, requireRole('admin'), (request: AuthenticatedRequest, response) => {
+    const { code, maxUses } = request.body ?? {};
+    if (!code || typeof code !== 'string') {
+      response.status(400).json({ message: 'Valid invitation code string is required.' });
+      return;
+    }
+    const created = db.createInvitationCode(code.trim().toUpperCase(), request.authUser!.id, typeof maxUses === 'number' ? maxUses : 100);
+    response.json({ code: created });
+  });
+
+  // Customer Support Endpoints
+  app.get('/api/support/tickets', requireAuth, (request: AuthenticatedRequest, response) => {
+    const isUserAdmin = request.authUser?.role === 'admin';
+    const tickets = isUserAdmin
+      ? db.getSupportTickets()
+      : db.getSupportTickets(request.authUser!.id);
+    response.json({ tickets });
+  });
+
+  app.post('/api/support/tickets', requireAuth, (request: AuthenticatedRequest, response) => {
+    const { subject, category, message } = request.body ?? {};
+    if (!subject || !message) {
+      response.status(400).json({ message: 'Subject and message body are required.' });
+      return;
+    }
+    const ticket = db.createSupportTicket(
+      request.authUser!.id,
+      request.authUser!.clientId,
+      request.authUser!.name,
+      request.authUser!.email,
+      subject.trim(),
+      category || 'General'
+    );
+
+    const initialMsg = db.addSupportMessage(
+      ticket.id,
+      request.authUser!.id,
+      request.authUser!.name,
+      request.authUser!.role,
+      message.trim()
+    );
+
+    response.status(201).json({ ticket, message: initialMsg });
+  });
+
+  app.get('/api/support/tickets/:ticketId/messages', requireAuth, (request, response) => {
+    const { ticketId } = request.params;
+    const messages = db.getSupportMessages(ticketId);
+    response.json({ messages });
+  });
+
+  app.post('/api/support/tickets/:ticketId/messages', requireAuth, (request: AuthenticatedRequest, response) => {
+    const { ticketId } = request.params;
+    const { message, status } = request.body ?? {};
+    if (!message || typeof message !== 'string') {
+      response.status(400).json({ message: 'Message content is required.' });
+      return;
+    }
+
+    const addedMsg = db.addSupportMessage(
+      ticketId,
+      request.authUser!.id,
+      request.authUser!.name,
+      request.authUser!.role,
+      message.trim()
+    );
+
+    if (status && ['open', 'in_progress', 'resolved', 'closed'].includes(status)) {
+      db.updateTicketStatus(ticketId, status);
+    } else if (request.authUser!.role === 'admin') {
+      db.updateTicketStatus(ticketId, 'in_progress');
+    }
+
+    response.status(201).json({ message: addedMsg });
   });
 
   const distPath = path.resolve(process.cwd(), 'dist');
@@ -183,3 +347,4 @@ export const createApp = ({ db, config }: AppDependencies) => {
 
   return app;
 };
+

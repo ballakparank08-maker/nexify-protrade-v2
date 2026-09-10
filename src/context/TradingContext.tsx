@@ -291,9 +291,18 @@ const getStoredWallet = (userId: string): UserWallet => {
 
 const mapAuthenticatedUser = (user: AuthenticatedUser): UserSession => ({
   id: user.id,
+  clientId: user.clientId,
   email: user.email,
   name: user.name,
+  phone: user.phone || '',
+  avatar: user.avatar || 'avatar-1',
   role: user.role,
+  status: user.status || 'active',
+  kycStatus: user.kycStatus || 'unverified',
+  twoFactorEnabled: user.twoFactorEnabled || false,
+  invitationCode: user.invitationCode || '',
+  myReferralCode: user.myReferralCode || '',
+  usdtBalance: user.usdtBalance ?? 0,
   institution: user.role === 'admin' ? 'Nexify ProTrade Operations' : 'Nexify ProTrade Member',
   loginMethod: 'credentials',
   lastLoginTime: 'Active session',
@@ -1683,9 +1692,15 @@ export const TradingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
   };
 
-  const registerUser = async ({ name, email, password }: { name: string; email: string; password: string }) => {
+  const registerUser = async (input: {
+    name: string;
+    email: string;
+    password: string;
+    verificationCode?: string;
+    invitationCode?: string;
+  }) => {
     try {
-      const { user } = await authService.register({ name, email, password });
+      const { user } = await authService.register(input);
       const sessionUser = mapAuthenticatedUser(user);
       setCurrentUser(sessionUser);
       setWallet({ ...createEmptyWallet(), isConnected: true });

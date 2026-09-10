@@ -21,7 +21,9 @@ import {
   RefreshCw,
   Lock,
   Clock,
-  Activity
+  Activity,
+  User,
+  Headphones
 } from 'lucide-react';
 import { useTrading } from '../../context/TradingContext';
 import { AppDomain, AppTab } from '../../types';
@@ -345,6 +347,40 @@ export const Header: React.FC = () => {
             >
               <Activity className="h-3.5 w-3.5 opacity-80" />
               <span>Markets</span>
+            </button>
+
+            {/* Profile Button */}
+            <button
+              id="nav-profile-link"
+              onClick={() => {
+                setCurrentDomain('app');
+                setCurrentTab('profile');
+              }}
+              className={`px-3.5 py-1.5 rounded-full text-xs font-medium tracking-wide transition-all duration-200 flex items-center space-x-1.5 ${
+                currentTab === 'profile' && currentDomain === 'app'
+                  ? 'bg-gradient-to-r from-cyan-500/20 to-indigo-500/20 text-cyan-300 border border-cyan-500/30 font-semibold shadow-sm shadow-cyan-500/10'
+                  : 'text-slate-300 hover:text-white hover:bg-white/5 border border-transparent'
+              }`}
+            >
+              <User className="h-3.5 w-3.5 opacity-80 text-purple-400" />
+              <span>Profile</span>
+            </button>
+
+            {/* Support Portal Button */}
+            <button
+              id="nav-support-link"
+              onClick={() => {
+                setCurrentDomain('app');
+                setCurrentTab('support');
+              }}
+              className={`px-3.5 py-1.5 rounded-full text-xs font-medium tracking-wide transition-all duration-200 flex items-center space-x-1.5 ${
+                currentTab === 'support' && currentDomain === 'app'
+                  ? 'bg-gradient-to-r from-cyan-500/20 to-indigo-500/20 text-cyan-300 border border-cyan-500/30 font-semibold shadow-sm shadow-cyan-500/10'
+                  : 'text-slate-300 hover:text-white hover:bg-white/5 border border-transparent'
+              }`}
+            >
+              <Headphones className="h-3.5 w-3.5 opacity-80 text-indigo-400" />
+              <span>Support Desk</span>
             </button>
           </div>
         </div>

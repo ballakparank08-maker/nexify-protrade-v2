@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { AlertTriangle, ArrowLeft, Lock, Mail, ShieldAlert, User } from 'lucide-react';
 import { useTrading } from '../../context/TradingContext';
+import { authService } from '../../services/authService';
 
 interface LoginPageProps {
   targetDomain: 'app' | 'admin';
@@ -23,6 +24,13 @@ export const LoginPage: React.FC<LoginPageProps> = ({ targetDomain }) => {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [fullName, setFullName] = useState('');
+  const [verificationCode, setVerificationCode] = useState('');
+  const [invitationCode, setInvitationCode] = useState('NEXIFY2026');
+  
+  const [codeSent, setCodeSent] = useState(false);
+  const [codeCountdown, setCodeCountdown] = useState(0);
+  const [codeSuccessMsg, setCodeSuccessMsg] = useState<string | null>(null);
+
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -32,6 +40,37 @@ export const LoginPage: React.FC<LoginPageProps> = ({ targetDomain }) => {
   const handleModeSwitch = (nextMode: AuthMode) => {
     setMode(nextMode);
     setErrorMessage(null);
+    setCodeSuccessMsg(null);
+  };
+
+  const handleSendCode = async () => {
+    if (!emailOrMemberId || !emailOrMemberId.includes('@')) {
+      setErrorMessage('Please enter a valid email address first to receive a verification code.');
+      return;
+    }
+    setErrorMessage(null);
+    setCodeSuccessMsg(null);
+    try {
+      const res = await authService.sendVerificationCode(emailOrMemberId);
+      setCodeSent(true);
+      setCodeCountdown(60);
+      setCodeSuccessMsg(res.code ? `Verification code sent! (Demo Code: ${res.code})` : 'Verification code sent to your email.');
+      if (res.code) {
+        setVerificationCode(res.code);
+      }
+      
+      const timer = setInterval(() => {
+        setCodeCountdown(prev => {
+          if (prev <= 1) {
+            clearInterval(timer);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Failed to send verification code.');
+    }
   };
 
   const handleCredentialsSubmit = async (event: React.FormEvent) => {
@@ -45,7 +84,17 @@ export const LoginPage: React.FC<LoginPageProps> = ({ targetDomain }) => {
           setErrorMessage('Passwords do not match.');
           return;
         }
-        const result = await registerUser({ name: fullName, email: emailOrMemberId, password });
+        if (!verificationCode) {
+          setErrorMessage('Email verification code is required to register.');
+          return;
+        }
+        const result = await registerUser({
+          name: fullName,
+          email: emailOrMemberId,
+          password,
+          verificationCode,
+          invitationCode: invitationCode.trim(),
+        });
         if (!result.success) {
           setErrorMessage(result.error || 'Unable to create your account.');
         }
@@ -125,6 +174,13 @@ export const LoginPage: React.FC<LoginPageProps> = ({ targetDomain }) => {
             </div>
           )}
 
+          {codeSuccessMsg && (
+            <div className="mb-5 flex gap-2.5 rounded-xl border border-emerald-500/30 bg-emerald-950/30 p-3 text-xs text-emerald-300 font-mono">
+              <Mail className="h-4 w-4 shrink-0 text-emerald-400" />
+              <span>{codeSuccessMsg}</span>
+            </div>
+          )}
+
           {isSignUp && (
             <label className="mb-4 block">
               <span className="mb-1.5 block font-mono text-xs uppercase text-slate-300">Full name</span>
@@ -142,6 +198,36 @@ export const LoginPage: React.FC<LoginPageProps> = ({ targetDomain }) => {
               <input type="email" required autoComplete="email" value={emailOrMemberId} onChange={event => setEmailOrMemberId(event.target.value)} placeholder="name@example.com" className="w-full bg-transparent font-mono text-xs text-white outline-none" />
             </span>
           </label>
+
+          {isSignUp && (
+            <>
+              <div className="mb-4 block">
+                <span className="mb-1.5 block font-mono text-xs uppercase text-slate-300">Email Verification Code</span>
+                <div className="flex gap-2">
+                  <span className="flex flex-1 items-center rounded-xl border border-slate-800 bg-slate-900/80 px-3 py-2.5 focus-within:border-purple-500/60">
+                    <Lock className="mr-2.5 h-4 w-4 shrink-0 text-slate-400" />
+                    <input type="text" required maxLength={6} value={verificationCode} onChange={event => setVerificationCode(event.target.value)} placeholder="6-digit code" className="w-full bg-transparent font-mono text-xs text-white outline-none" />
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleSendCode}
+                    disabled={codeCountdown > 0}
+                    className="shrink-0 rounded-xl border border-purple-500/40 bg-purple-900/40 px-3.5 py-2.5 font-mono text-xs font-semibold text-purple-200 hover:bg-purple-800/50 disabled:opacity-50"
+                  >
+                    {codeCountdown > 0 ? `${codeCountdown}s` : (codeSent ? 'Resend Code' : 'Send Code')}
+                  </button>
+                </div>
+              </div>
+
+              <label className="mb-4 block">
+                <span className="mb-1.5 block font-mono text-xs uppercase text-slate-300">Invitation / Referral Code</span>
+                <span className="flex items-center rounded-xl border border-slate-800 bg-slate-900/80 px-3 py-2.5 focus-within:border-purple-500/60">
+                  <User className="mr-2.5 h-4 w-4 shrink-0 text-purple-400" />
+                  <input type="text" value={invitationCode} onChange={event => setInvitationCode(event.target.value)} placeholder="e.g. NEXIFY2026" className="w-full bg-transparent font-mono text-xs text-white outline-none" />
+                </span>
+              </label>
+            </>
+          )}
 
           <label className="block">
             <span className="mb-1.5 block font-mono text-xs uppercase text-slate-300">Password</span>

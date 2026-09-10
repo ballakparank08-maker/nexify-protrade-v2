@@ -5,9 +5,18 @@ import type { DatabaseUserRow, SqliteDatabase } from './database.js';
 
 export interface PublicUser {
   id: string;
+  clientId: string;
   name: string;
   email: string;
+  phone: string;
+  avatar: string;
   role: 'trader' | 'admin';
+  status: 'active' | 'frozen' | 'suspended';
+  kycStatus: 'unverified' | 'pending' | 'verified' | 'rejected';
+  twoFactorEnabled: boolean;
+  invitationCode: string;
+  myReferralCode: string;
+  usdtBalance: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -26,11 +35,20 @@ export interface AdminBootstrapInput {
 const PASSWORD_MIN_LENGTH = 8;
 const BCRYPT_ROUNDS = 12;
 
-const mapPublicUser = (row: Pick<DatabaseUserRow, 'id' | 'name' | 'email' | 'role' | 'created_at' | 'updated_at'>): PublicUser => ({
+export const mapPublicUser = (row: DatabaseUserRow): PublicUser => ({
   id: row.id,
+  clientId: row.client_id || `CL-${row.id.substring(0, 6).toUpperCase()}`,
   name: row.name,
   email: row.email,
-  role: row.role,
+  phone: row.phone || '',
+  avatar: row.avatar || 'avatar-1',
+  role: row.role as 'trader' | 'admin',
+  status: (row.status as 'active' | 'frozen' | 'suspended') || 'active',
+  kycStatus: (row.kyc_status as 'unverified' | 'pending' | 'verified' | 'rejected') || 'unverified',
+  twoFactorEnabled: Boolean(row.two_factor_enabled),
+  invitationCode: row.invitation_code || '',
+  myReferralCode: row.my_referral_code || `REF-${row.id.substring(0, 6).toUpperCase()}`,
+  usdtBalance: row.usdt_balance ?? 0,
   createdAt: row.created_at,
   updatedAt: row.updated_at,
 });
@@ -92,9 +110,37 @@ const createSession = (db: SqliteDatabase, config: AuthConfig, userId: string) =
   return sessionToken;
 };
 
+export const sendVerificationCode = (db: SqliteDatabase, email: string) => {
+  const emailError = validateEmail(email);
+  if (emailError) {
+    return { error: emailError, status: 400 as const };
+  }
+
+  const normalizedEmail = normalizeEmail(email);
+  const code = Math.floor(100000 + Math.random() * 900000).toString();
+  
+  if (typeof db.saveEmailCode === 'function') {
+    db.saveEmailCode(normalizedEmail, code);
+  }
+
+  console.log(`[VERIFICATION CODE] Sent code ${code} to ${normalizedEmail}`);
+
+  return {
+    status: 200 as const,
+    data: {
+      message: 'Verification code sent successfully to email.',
+      code, // returned for display in demo / auto-fill
+    },
+  };
+};
+
 export const findUserByEmail = (db: SqliteDatabase, email: string) => {
   const normalizedEmail = normalizeEmail(email);
   return db.prepare<unknown[], DatabaseUserRow>('SELECT * FROM users WHERE email = ?').get(normalizedEmail) || null;
+};
+
+export const findUserById = (db: SqliteDatabase, id: string) => {
+  return db.prepare<unknown[], DatabaseUserRow>('SELECT * FROM users WHERE id = ?').get(id) || null;
 };
 
 export const findUserBySessionToken = (db: SqliteDatabase, config: AuthConfig, sessionToken: string) => {
@@ -116,7 +162,17 @@ export const deleteSession = (db: SqliteDatabase, config: AuthConfig, sessionTok
   db.prepare('DELETE FROM sessions WHERE token_hash = ?').run(tokenHash);
 };
 
-export const registerUser = (db: SqliteDatabase, config: AuthConfig, input: { name: string; email: string; password: string }) => {
+export const registerUser = (
+  db: SqliteDatabase,
+  config: AuthConfig,
+  input: {
+    name: string;
+    email: string;
+    password: string;
+    verificationCode?: string;
+    invitationCode?: string;
+  }
+) => {
   const nameError = validateName(input.name);
   if (nameError) {
     return { error: nameError, status: 400 as const };
@@ -133,18 +189,61 @@ export const registerUser = (db: SqliteDatabase, config: AuthConfig, input: { na
   }
 
   const normalizedEmail = normalizeEmail(input.email);
+  
+  // Validate email verification code if provided or required
+  if (input.verificationCode) {
+    if (typeof db.verifyEmailCode === 'function') {
+      const isValidCode = db.verifyEmailCode(normalizedEmail, input.verificationCode);
+      if (!isValidCode) {
+        return { error: 'Invalid or expired email verification code.', status: 400 as const };
+      }
+    }
+  }
+
+  // Validate invitation code if provided
+  if (input.invitationCode && input.invitationCode.trim()) {
+    if (typeof db.validateInvitationCode === 'function') {
+      const isValidInvite = db.validateInvitationCode(input.invitationCode.trim());
+      if (!isValidInvite) {
+        return { error: 'Invalid or expired invitation code.', status: 400 as const };
+      }
+    }
+  }
+
   if (findUserByEmail(db, normalizedEmail)) {
     return { error: 'An account with that email already exists.', status: 409 as const };
   }
 
   const now = new Date().toISOString();
   const userId = crypto.randomUUID();
-  db.prepare(`
-    INSERT INTO users (id, name, email, password_hash, role, created_at, updated_at)
-    VALUES (?, ?, ?, ?, 'trader', ?, ?)
-  `).run(userId, input.name.trim(), normalizedEmail, createPasswordHash(input.password), now, now);
+  const clientId = `CL-${Math.floor(100000 + Math.random() * 900000)}`;
+  const myReferralCode = `REF-${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
 
-  const createdUser = db.prepare<unknown[], DatabaseUserRow>('SELECT * FROM users WHERE id = ?').get(userId);
+  db.prepare(`
+    INSERT INTO users (
+      id, client_id, name, email, password_hash, role, phone, avatar, status, kyc_status,
+      two_factor_enabled, invitation_code, my_referral_code, usdt_balance, crypto_assets,
+      created_at, updated_at
+    )
+    VALUES (?, ?, ?, ?, ?, 'trader', '', 'avatar-1', 'active', 'unverified', 0, ?, ?, 0, '{}', ?, ?)
+  `).run(
+    userId,
+    clientId,
+    input.name.trim(),
+    normalizedEmail,
+    createPasswordHash(input.password),
+    input.invitationCode?.trim() || '',
+    myReferralCode,
+    now,
+    now
+  );
+
+  // Consume invitation code if present
+  if (input.invitationCode && typeof db.useInvitationCode === 'function') {
+    db.useInvitationCode(input.invitationCode.trim());
+  }
+
+  const createdUser = findUserById(db, userId);
   if (!createdUser) {
     throw new Error('Failed to create user.');
   }
@@ -167,6 +266,10 @@ export const loginUser = (db: SqliteDatabase, config: AuthConfig, input: { email
     return invalidCredentials;
   }
 
+  if (user.status === 'suspended') {
+    return { error: 'Account has been suspended. Please contact support.', status: 403 as const };
+  }
+
   const matches = bcrypt.compareSync(input.password, user.password_hash);
   if (!matches) {
     return invalidCredentials;
@@ -179,6 +282,63 @@ export const loginUser = (db: SqliteDatabase, config: AuthConfig, input: { email
       sessionToken: createSession(db, config, user.id),
     },
   };
+};
+
+export const updateUserProfile = (
+  db: SqliteDatabase,
+  userId: string,
+  updates: { name?: string; phone?: string; avatar?: string }
+) => {
+  const user = findUserById(db, userId);
+  if (!user) {
+    return { error: 'User not found.', status: 404 as const };
+  }
+
+  if (updates.name !== undefined) {
+    const nameError = validateName(updates.name);
+    if (nameError) return { error: nameError, status: 400 as const };
+  }
+
+  if (typeof db.updateUserProfile === 'function') {
+    db.updateUserProfile(userId, updates);
+  }
+
+  const updated = findUserById(db, userId);
+  return {
+    status: 200 as const,
+    data: { user: mapPublicUser(updated!) },
+  };
+};
+
+export const changeUserPassword = (
+  db: SqliteDatabase,
+  userId: string,
+  currentPassword: string,
+  newPassword: string
+) => {
+  const user = findUserById(db, userId);
+  if (!user) {
+    return { error: 'User not found.', status: 404 as const };
+  }
+
+  const matches = bcrypt.compareSync(currentPassword, user.password_hash);
+  if (!matches) {
+    return { error: 'Current password is incorrect.', status: 400 as const };
+  }
+
+  const passwordError = validatePassword(newPassword);
+  if (passwordError) {
+    return { error: passwordError, status: 400 as const };
+  }
+
+  const now = new Date().toISOString();
+  db.prepare('UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ?').run(
+    createPasswordHash(newPassword),
+    now,
+    userId
+  );
+
+  return { status: 200 as const, data: { message: 'Password updated successfully.' } };
 };
 
 export const bootstrapAdminUser = (db: SqliteDatabase, input: AdminBootstrapInput) => {
@@ -201,15 +361,22 @@ export const bootstrapAdminUser = (db: SqliteDatabase, input: AdminBootstrapInpu
 
   const now = new Date().toISOString();
   const userId = crypto.randomUUID();
-  db.prepare(`
-    INSERT INTO users (id, name, email, password_hash, role, created_at, updated_at)
-    VALUES (?, ?, ?, ?, 'admin', ?, ?)
-  `).run(userId, input.name.trim(), normalizedEmail, createPasswordHash(input.password), now, now);
+  const clientId = `ADM-${Math.floor(100000 + Math.random() * 900000)}`;
 
-  const createdUser = db.prepare<unknown[], DatabaseUserRow>('SELECT * FROM users WHERE id = ?').get(userId);
+  db.prepare(`
+    INSERT INTO users (
+      id, client_id, name, email, password_hash, role, phone, avatar, status, kyc_status,
+      two_factor_enabled, invitation_code, my_referral_code, usdt_balance, crypto_assets,
+      created_at, updated_at
+    )
+    VALUES (?, ?, ?, ?, ?, 'admin', '', 'avatar-admin', 'active', 'verified', 0, '', 'ADMIN-REF', 1000000, '{}', ?, ?)
+  `).run(userId, clientId, input.name.trim(), normalizedEmail, createPasswordHash(input.password), now, now);
+
+  const createdUser = findUserById(db, userId);
   if (!createdUser) {
     throw new Error('Failed to create bootstrap admin account.');
   }
 
   return { created: true, user: mapPublicUser(createdUser) };
 };
+

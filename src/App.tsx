@@ -10,6 +10,8 @@ import { MiningTerminal } from './components/trade/MiningTerminal';
 import { CryptoLoanTerminal } from './components/trade/CryptoLoanTerminal';
 import { ConvertTerminal } from './components/trade/ConvertTerminal';
 import { MarketOverview } from './components/market/MarketOverview';
+import { ProfileView } from './components/profile/ProfileView';
+import { SupportPortal } from './components/support/SupportPortal';
 import { AdminDashboard } from './components/admin/AdminDashboard';
 import { AuthModal } from './components/auth/AuthModal';
 import { LoginPage } from './components/auth/LoginPage';
@@ -166,6 +168,8 @@ const MainContent: React.FC = () => {
               {currentTab === 'loan' && <CryptoLoanTerminal />}
               {currentTab === 'market' && <MarketOverview />}
               {currentTab === 'convert' && <ConvertTerminal />}
+              {currentTab === 'profile' && <ProfileView />}
+              {currentTab === 'support' && <SupportPortal />}
             </div>
           )
         )}

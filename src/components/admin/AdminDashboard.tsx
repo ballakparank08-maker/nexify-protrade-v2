@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Server, 
   ShieldCheck, 
@@ -17,9 +17,14 @@ import {
   ShieldAlert,
   LogOut,
   ArrowLeft,
-  KeyRound
+  KeyRound,
+  PlusCircle,
+  MessageSquare,
+  QrCode,
+  DollarSign
 } from 'lucide-react';
 import { useTrading } from '../../context/TradingContext';
+import { authService } from '../../services/authService';
 import { ClientAccount } from '../../types';
 
 export const AdminDashboard: React.FC = () => {
@@ -41,6 +46,22 @@ export const AdminDashboard: React.FC = () => {
     logout,
     addSecurityAuditLog
   } = useTrading();
+
+  const [activeAdminTab, setActiveAdminTab] = useState<'clients' | 'invitations' | 'support' | 'kyc' | 'futures'>('clients');
+
+  // Backend API states for real-time admin actions
+  const [adminClients, setAdminClients] = useState<any[]>([]);
+  const [invitationCodes, setInvitationCodes] = useState<any[]>([]);
+  const [supportTickets, setSupportTickets] = useState<any[]>([]);
+  const [selectedTicket, setSelectedTicket] = useState<any | null>(null);
+  const [ticketMessages, setTicketMessages] = useState<any[]>([]);
+  const [replyMessage, setReplyMessage] = useState('');
+
+  const [newInviteCode, setNewInviteCode] = useState('');
+  const [newInviteMaxUses, setNewInviteMaxUses] = useState(100);
+
+  const [editingUserId, setEditingUserId] = useState<string | null>(null);
+  const [editingBalance, setEditingBalance] = useState<number>(0);
 
   const [filterKyc, setFilterKyc] = useState<'all' | 'pending_review' | 'verified' | 'rejected'>('all');
   const [searchKyc, setSearchKyc] = useState('');
@@ -81,6 +102,85 @@ export const AdminDashboard: React.FC = () => {
     setAdminActionMsg(result.message);
     if (result.success) {
       addSecurityAuditLog(`Future contract ${positionId} verified as ${outcome.toUpperCase()} by ${currentUser?.email}`, 'success');
+    }
+  };
+
+  const loadAdminData = async () => {
+    try {
+      const [clientsRes, codesRes, ticketsRes] = await Promise.all([
+        authService.getAdminClients(),
+        authService.getAdminInvitationCodes(),
+        authService.getSupportTickets(),
+      ]);
+      setAdminClients(clientsRes.clients || []);
+      setInvitationCodes(codesRes.codes || []);
+      setSupportTickets(ticketsRes.tickets || []);
+      if (ticketsRes.tickets?.length > 0 && !selectedTicket) {
+        setSelectedTicket(ticketsRes.tickets[0]);
+      }
+    } catch (e) {
+      console.error('Failed to load admin data', e);
+    }
+  };
+
+  useEffect(() => {
+    if (currentUser?.role === 'admin') {
+      void loadAdminData();
+    }
+  }, [currentUser?.role]);
+
+  useEffect(() => {
+    if (selectedTicket) {
+      authService.getSupportMessages(selectedTicket.id).then(res => setTicketMessages(res.messages)).catch(() => {});
+    }
+  }, [selectedTicket?.id]);
+
+  const handleUpdateBalance = async (userId: string) => {
+    try {
+      const res = await authService.updateClientBalance(userId, editingBalance);
+      setAdminActionMsg(`Updated balance for ${res.user.name} to $${res.user.usdtBalance.toLocaleString()} USDT`);
+      setEditingUserId(null);
+      void loadAdminData();
+    } catch (err: any) {
+      setAdminActionMsg(err.message || 'Failed to update balance.');
+    }
+  };
+
+  const handleUpdateStatus = async (userId: string, status: string) => {
+    try {
+      const res = await authService.updateClientStatus(userId, status);
+      setAdminActionMsg(`Updated account status for ${res.user.name} to ${status.toUpperCase()}`);
+      void loadAdminData();
+    } catch (err: any) {
+      setAdminActionMsg(err.message || 'Failed to update account status.');
+    }
+  };
+
+  const handleCreateInviteCode = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newInviteCode.trim()) return;
+    try {
+      const res = await authService.createAdminInvitationCode(newInviteCode.trim(), newInviteMaxUses);
+      setInvitationCodes(prev => [res.code, ...prev.filter(c => c.code !== res.code.code)]);
+      setAdminActionMsg(`Invitation Code ${res.code.code} created successfully.`);
+      setNewInviteCode('');
+    } catch (err: any) {
+      setAdminActionMsg(err.message || 'Failed to create invitation code.');
+    }
+  };
+
+  const handleAdminReplySupport = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedTicket || !replyMessage.trim()) return;
+    const msgText = replyMessage.trim();
+    setReplyMessage('');
+    try {
+      const res = await authService.sendSupportMessage(selectedTicket.id, msgText, 'in_progress');
+      setTicketMessages(prev => [...prev, res.message]);
+      setAdminActionMsg(`Reply sent to client ${selectedTicket.userName}`);
+      void loadAdminData();
+    } catch (err: any) {
+      setAdminActionMsg('Failed to send support reply.');
     }
   };
 

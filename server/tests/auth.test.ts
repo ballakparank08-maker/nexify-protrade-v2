@@ -154,3 +154,83 @@ test('admin verification is enforced by backend role checks', async () => {
     context.cleanup();
   }
 });
+
+test('new user receives 0 balance, fresh client ID, and email code verification works', async () => {
+  const context = createTestContext();
+  try {
+    const agent = request.agent(context.app);
+
+    // Send code
+    const codeRes = await agent
+      .post('/api/auth/send-code')
+      .send({ email: 'fresh@example.com' });
+    assert.equal(codeRes.status, 200);
+    const code = codeRes.body.code;
+    assert.ok(code && code.length === 6);
+
+    // Register with verification code
+    const regRes = await agent
+      .post('/api/auth/register')
+      .send({
+        name: 'Fresh Trader',
+        email: 'fresh@example.com',
+        password: 'Password123!',
+        verificationCode: code,
+      });
+
+    assert.equal(regRes.status, 201);
+    assert.equal(regRes.body.user.usdtBalance, 0);
+    assert.ok(regRes.body.user.clientId.startsWith('CL-'));
+
+    // Admin can view clients and adjust balance
+    bootstrapAdminUser(context.db, {
+      name: 'Admin Boss',
+      email: 'boss@nexifyprotrade.test',
+      password: 'Password123!',
+    });
+    const adminAgent = request.agent(context.app);
+    await adminAgent
+      .post('/api/auth/login')
+      .send({ email: 'boss@nexifyprotrade.test', password: 'Password123!' });
+
+    const clientsRes = await adminAgent.get('/api/admin/clients');
+    assert.equal(clientsRes.status, 200);
+    assert.ok(clientsRes.body.clients.length >= 2);
+
+    const balRes = await adminAgent
+      .post('/api/admin/clients/balance')
+      .send({ userId: regRes.body.user.id, amount: 500 });
+    assert.equal(balRes.status, 200);
+    assert.equal(balRes.body.user.usdtBalance, 500);
+  } finally {
+    context.cleanup();
+  }
+});
+
+test('customer support tickets and messaging works', async () => {
+  const context = createTestContext();
+  try {
+    const clientAgent = request.agent(context.app);
+    const reg = await clientAgent
+      .post('/api/auth/register')
+      .send({ name: 'Support Tester', email: 'supportuser@example.com', password: 'Password123!' });
+    assert.equal(reg.status, 201);
+
+    // Create ticket
+    const ticketRes = await clientAgent
+      .post('/api/support/tickets')
+      .send({ subject: 'Need Help with Deposit', category: 'Financial', message: 'How do I deposit?' });
+    assert.equal(ticketRes.status, 201);
+    const ticketId = ticketRes.body.ticket.id;
+    assert.ok(ticketId);
+
+    // Fetch messages
+    const msgsRes = await clientAgent.get(`/api/support/tickets/${ticketId}/messages`);
+    assert.equal(msgsRes.status, 200);
+    assert.equal(msgsRes.body.messages.length, 1);
+    assert.equal(msgsRes.body.messages[0].text, 'How do I deposit?');
+  } finally {
+    context.cleanup();
+  }
+});
+
