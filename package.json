@@ -12,6 +12,7 @@
     "build:server": "esbuild server/src/index.ts --platform=node --format=esm --bundle --packages=external --outfile=server/dist/index.js",
     "build:all": "npm run build && npm run build:server",
     "preview": "vite preview",
+    "start": "node server/dist/index.js",
     "start:server": "node server/dist/index.js",
     "bootstrap:admin": "tsx server/src/bootstrap-admin.ts",
     "test": "npm run test:server",
