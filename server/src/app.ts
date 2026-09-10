@@ -1,3 +1,5 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import cookieParser from 'cookie-parser';
 import cors from 'cors';
 import express, { type Request, type Response, type NextFunction } from 'express';
@@ -154,6 +156,18 @@ export const createApp = ({ db, config }: AppDependencies) => {
   app.get('/api/auth/admin/verify', requireAuth, requireRole('admin'), (request: AuthenticatedRequest, response) => {
     response.json({ authorized: true, user: request.authUser });
   });
+
+  const distPath = path.resolve(process.cwd(), 'dist');
+  if (fs.existsSync(distPath)) {
+    app.use(express.static(distPath));
+    app.get('*', (request: Request, response: Response, next: NextFunction) => {
+      if (request.path.startsWith('/api')) {
+        next();
+        return;
+      }
+      response.sendFile(path.join(distPath, 'index.html'));
+    });
+  }
 
   app.use((error: Error, _request: Request, response: Response, _next: NextFunction) => {
     response.status(500).json({ message: config.nodeEnv === 'production' ? 'Internal server error.' : error.message });
