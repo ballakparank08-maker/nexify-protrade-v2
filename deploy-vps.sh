@@ -27,7 +27,7 @@ NODE_ENV="production"
 PORT="3000"
 DATABASE_PATH="./server/data/nexify-protrade.json"
 AUTH_SECRET="nexify-protrade-production-auth-secret-key-9988"
-FRONTEND_ORIGIN="https://nexifyprotrade.com,https://www.nexifyprotrade.com"
+FRONTEND_ORIGIN="https://nexifyprotrade.site,https://www.nexifyprotrade.site,https://nexifyprotrade.com,https://www.nexifyprotrade.com"
 SESSION_TTL_HOURS="168"
 AUTH_COOKIE_NAME="nexify_session"
 AUTH_COOKIE_SECURE="true"
@@ -46,7 +46,7 @@ pm2 save
 pm2 startup | tail -n 1 | bash || true
 
 # 5. Configure NGINX reverse proxy
-echo "--> Configuring NGINX for nexifyprotrade.online and nexifyprotrade.com..."
+echo "--> Configuring NGINX for nexifyprotrade.online and nexifyprotrade.site..."
 cat << 'EOF' > /etc/nginx/sites-available/nexify-protrade
 # Backend Domain: nexifyprotrade.online
 server {
@@ -66,10 +66,10 @@ server {
     }
 }
 
-# Frontend Domain: nexifyprotrade.com
+# Frontend Domain: nexifyprotrade.com & nexifyprotrade.site
 server {
     listen 80;
-    server_name nexifyprotrade.com www.nexifyprotrade.com;
+    server_name nexifyprotrade.com www.nexifyprotrade.com nexifyprotrade.site www.nexifyprotrade.site;
     root /var/www/nexify-protrade/dist;
     index index.html;
 

@@ -12,7 +12,7 @@ module.exports = {
         PORT: 3000,
         DATABASE_PATH: './server/data/nexify-protrade.json',
         AUTH_SECRET: 'nexify-protrade-production-auth-secret-key-9988',
-        FRONTEND_ORIGIN: 'https://nexifyprotrade.com,https://www.nexifyprotrade.com',
+        FRONTEND_ORIGIN: 'https://nexifyprotrade.site,https://www.nexifyprotrade.site,https://nexifyprotrade.com,https://www.nexifyprotrade.com',
         AUTH_COOKIE_SECURE: 'true',
         AUTH_COOKIE_SAME_SITE: 'none',
         ADMIN_BOOTSTRAP_NAME: 'System Administrator',
